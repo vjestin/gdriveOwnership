@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<body>
+  <!--Add buttons to initiate auth sequence and sign out-->
+  <button id="authorize-button" style="display: none;">Authorize target owner</button>
+  <button id="signout-button" style="display: none;">Sign Out</button>
+  <label for="source-owner">Source owner</label>
+  <input id="source-owner" type="texfield" style="display: none;"/>
+  <button id="transfer-button" style="display: none;">Transfer docs ownership</button>
+  <div id="content"></div>
+
+  <script type="text/javascript">
+    var apiKey = 'AIzaSyDWxJ_Uoj8G3PZh3x5zJoQiRcZIaa5QzwM';
+    var clientId = '811950031440-9rmicvdsi872qf5p7hc1itfb8blkf4rb.apps.googleusercontent.com';
+    var scopes = 'profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.apps.readonly https://www.googleapis.com/auth/drive.metadata https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/drive.photos.readonly https://www.googleapis.com/auth/drive.readonly';
+    var auth2; // The Sign-In object.
+    var operations = {
+      items: []
+    };
+    var authorizeButton = document.getElementById('authorize-button');
+    var signoutButton = document.getElementById('signout-button');
+    var sourceOwnerField = document.getElementById('source-owner');
+    var transferButton = document.getElementById('transfer-button');
+
+    function handleClientLoad() {
+      // Load the API client and auth library
+      gapi.load('client:auth2', initAuth);
+    }
+
+    function targetOwner() {
+      return auth2.currentUser.get().getBasicProfile().getEmail();
+    }
+
+    function initAuth() {
+      gapi.client.setApiKey(apiKey);
+      gapi.auth2.init({
+          client_id: clientId,
+          scope: scopes,
+          authUser: -1
+      }).then(function () {
+        auth2 = gapi.auth2.getAuthInstance();
+        // Listen for sign-in state changes.
+        auth2.isSignedIn.listen(updateSigninStatus);
+        // Handle the initial sign-in state.
+        updateSigninStatus(auth2.isSignedIn.get());
+        authorizeButton.onclick = handleAuthClick;
+        signoutButton.onclick = handleSignoutClick;
+        transferButton.onclick = handleTransferClick;
+      });
+    }
+    function updateSigninStatus(isSignedIn) {
+      if (isSignedIn) {
+        authorizeButton.style.display = 'none';
+        signoutButton.style.display = 'block';
+        transferButton.style.display = 'block';
+        sourceOwnerField.style.display = 'block';
+
+      } else {
+        authorizeButton.style.display = 'block';
+        signoutButton.style.display = 'none';
+        transferButton.style.display = 'none';
+        sourceOwnerField.style.display = 'none';
+      }
+    }
+    function handleAuthClick(event) {
+      auth2.signIn();
+    }
+    function handleSignoutClick(event) {
+      auth2.signOut();
+    }
+    // Load the API and make an API call.  Display the results on the screen.
+    function handleTransferClick(event) {
+
+      handleFolders();
+
+
+
+    }
+
+    function handleFolders(pageToken) {
+      gapi.client.load('drive', 'v2', function() {
+        var request = gapi.client.drive.files.list({
+          maxResults: 3,
+          q: "'" + sourceOwnerField.value + "' in owners and '" + targetOwner() + "' in writers",
+          pageToken: pageToken
+        });
+        request.execute(function(resp) {
+          var content = "";
+          for (var i = 0 ; i < resp.items.length; i++) {
+            operations.items.push({
+              type: 'createDirectory',
+              name: 'TempTransferOwnership_' + resp.items[i].title,
+              parents: (function (parents){
+                var result = [];
+                for(var i = 0; i < parents.length; i++) {
+                  result.push(parents[i].id);
+                }
+                return result;
+              })(resp.items[i].parents)
+            });
+          }
+          if(resp.nextPageToken) {
+            handleFolders(resp.nextPageToken);
+          } else {
+            processOperations();
+          }
+        });
+      });
+    }
+
+    function processOperations() {
+      console.log(operations);
+    }
+  </script>
+  <script src="https://apis.google.com/js/api.js?onload=handleClientLoad"></script>
+</body>
+</html>
